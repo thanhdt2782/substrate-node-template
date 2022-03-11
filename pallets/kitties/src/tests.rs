@@ -84,24 +84,57 @@ fn transfer_kitty_should_work() {
 		(2, *b"123456789012345a", Gender::Male),
 	])
 	.execute_with(|| {
-		// Check that account 10 own a kitty
+		// Account 10 creates a kitty
 		assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
 		let id = KittiesOwned::<Test>::get(10)[0];
 
-		// Account 10 send kitty to account 3
+		// and sends it to account 3
 		assert_ok!(SubstrateKitties::transfer(Origin::signed(10), 3, id));
 
-		// Account 10 now has nothing
+		// Check that account 10 now has nothing
 		assert_eq!(KittiesOwned::<Test>::get(10).len(), 0);
 
 		// but account 3 does
 		assert_eq!(KittiesOwned::<Test>::get(3).len(), 1);
 		assert_ownership(3, id);
+
+		// Check buy_kitty transfers the right amount for a higher bid price
+		// First get the balances of each account
+		let balance_1_before = Balances::free_balance(&1);
+		let balance_2_before = Balances::free_balance(&2);
+
+		// Account #2 sets new price to 4
+		let id = KittiesOwned::<Test>::get(2)[0];
+		let set_price = 4;
+		assert_ok!(SubstrateKitties::set_price(Origin::signed(2), id, Some(set_price)));
+
+		// Account #1 buys kitty at 2x the price
+		assert_ok!(SubstrateKitties::buy_kitty(Origin::signed(1), id, set_price*2));
+
+		// Check that balance transfer works as expected
+		let balance_1_after = Balances::free_balance(&1);
+		let balance_2_after = Balances::free_balance(&2);
+
+		assert!(balance_1_before - set_price*2  == balance_1_after);
+		assert!(balance_2_before + set_price*2 == balance_2_after);
+
+		// Transfer should fail if max kitties is reached
+		// Set max kitties for account #10
+		for _i in 0..<Test as Config>::MaxKittiesOwned::get() {
+			assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
+			System::set_block_number(System::block_number() + 1);
+		}
+		
+		// Account #10 should not be able to buy a new kitty
+		assert_noop!(
+			SubstrateKitties::buy_kitty(Origin::signed(10), id, set_price * 10),
+			Error::<Test>::TooManyOwned
+		);
 	});
 }
 
 #[test]
-fn transfer_non_owned_kitty_should_fail() {
+fn transfer_kitty_should_fail() {
 	new_test_ext(vec![
 		(1, *b"1234567890123456", Gender::Female),
 		(2, *b"123456789012345a", Gender::Male),
@@ -113,6 +146,39 @@ fn transfer_non_owned_kitty_should_fail() {
 		assert_noop!(
 			SubstrateKitties::transfer(Origin::signed(9), 2, hash),
 			Error::<Test>::NotOwner
+		);
+
+		// Check transfer fails when transferring to self
+		// Get kitty info from account 1
+		let id = KittiesOwned::<Test>::get(1)[0];
+
+		assert_noop!(
+			SubstrateKitties::transfer(Origin::signed(1), 1, id),
+			Error::<Test>::TransferToSelf
+		);
+
+		// Check transfer fails when no kitty exists
+		let random_id = [0u8; 16];
+
+		assert_noop!(
+			SubstrateKitties::transfer(Origin::signed(2), 1, random_id),
+			Error::<Test>::NoKitty
+		);
+
+		// Check that transfer fails when max kitty is reached
+		// Create `MaxKittiesOwned` kitties for account #10
+		for _i in 0..<Test as Config>::MaxKittiesOwned::get() {
+			assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
+			System::set_block_number(System::block_number() + 1);
+		}
+
+		// Get a kitty to transfer
+		let kitty_1 = KittiesOwned::<Test>::get(1)[0];
+
+		// Account #10 should not be able to receive a new kitty
+		assert_noop!(
+			SubstrateKitties::transfer(Origin::signed(1), 10, kitty_1),
+			Error::<Test>::TooManyOwned
 		);
 	});
 }
@@ -291,47 +357,6 @@ fn dna_helpers_should_work() {
 	});
 }
 
-#[test]
-fn transfer_fails_to_self() {
-	new_test_ext(vec![
-		(1, *b"1234567890123456", Gender::Female),
-		(2, *b"123456789012345a", Gender::Male),
-	])
-	.execute_with(|| {
-		// Check transfer fails when transferring to self
-		// Get kitty info from account 1
-		let id = KittiesOwned::<Test>::get(1)[0];
-
-		assert_noop!(
-			SubstrateKitties::transfer(Origin::signed(1), 1, id),
-			Error::<Test>::TransferToSelf
-		);
-
-		// Check transfer fails when no kitty exists
-		let random_id = [0u8; 16];
-
-		assert_noop!(
-			SubstrateKitties::transfer(Origin::signed(2), 1, random_id),
-			Error::<Test>::NoKitty
-		);
-
-		// Check that transfer fails when max kitty is reached
-		// Create `MaxKittiesOwned` kitties for account #10
-		for _i in 0..<Test as Config>::MaxKittiesOwned::get() {
-			assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
-			System::set_block_number(System::block_number() + 1);
-		}
-
-		// Get a kitty to transfer
-		let kitty_1 = KittiesOwned::<Test>::get(1)[0];
-
-		// Account #10 should not be able to receive a new kitty
-		assert_noop!(
-			SubstrateKitties::transfer(Origin::signed(1), 10, kitty_1),
-			Error::<Test>::TooManyOwned
-		);
-	});
-}
 
 #[test]
 fn buy_kitty_works() {
@@ -401,47 +426,6 @@ fn buy_kitty_fails() {
 		assert_noop!(
 			SubstrateKitties::buy_kitty(Origin::signed(10), id, 2),
 			Error::<Test>::BidPriceTooLow
-		);
-	});
-}
-
-#[test]
-fn high_bid_transfers_correctly() {
-	new_test_ext(vec![
-		(1, *b"1234567890123456", Gender::Female),
-		(2, *b"123456789012345a", Gender::Male),
-	])
-	.execute_with(|| {
-		// Check buy_kitty transfers the right amount when bid price is too high
-		// First get the balances of each account
-		let balance_1_before = Balances::free_balance(&1);
-		let balance_2_before = Balances::free_balance(&2);
-
-		// Account #2 sets new price to 4
-		let id = KittiesOwned::<Test>::get(2)[0];
-		let set_price = 4;
-		assert_ok!(SubstrateKitties::set_price(Origin::signed(2), id, Some(set_price)));
-
-		// Account #1 buys kitty at 2x the price
-		assert_ok!(SubstrateKitties::buy_kitty(Origin::signed(1), id, set_price*2));
-
-		// Balance transfer worked as expected
-		let balance_1_after = Balances::free_balance(&1);
-		let balance_2_after = Balances::free_balance(&2);
-
-		assert!(balance_1_before - set_price*2  == balance_1_after);
-		assert!(balance_2_before + set_price*2 == balance_2_after);
-
-		// Check that it's not possible to buy a kitty if max is reached
-		// Set max kitties for account #10
-		for _i in 0..<Test as Config>::MaxKittiesOwned::get() {
-			assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
-			System::set_block_number(System::block_number() + 1);
-		}
-		// Account #10 should not be able to buy a new kitty
-		assert_noop!(
-			SubstrateKitties::buy_kitty(Origin::signed(10), id, set_price * 10),
-			Error::<Test>::TooManyOwned
 		);
 	});
 }
