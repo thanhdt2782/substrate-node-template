@@ -364,18 +364,34 @@ fn buy_kitty_works() {
 			SubstrateKitties::buy_kitty(Origin::signed(10), id, 2),
 			Error::<Test>::NotForSale
 		);
+
+		// Check buy_kitty fails when balance is too low
+		let price = u64::MAX;
+		assert_ok!(SubstrateKitties::set_price(Origin::signed(2), id, Some(price)));
+
+		assert_noop!(
+			SubstrateKitties::buy_kitty(Origin::signed(1), id, price),
+			pallet_balances::Error::<Test>::InsufficientBalance
+		);
 	});
 }
 
 #[test]
-fn price_too_low() {
+fn buy_kitty_fails() {
 	new_test_ext(vec![
 		(1, *b"1234567890123456", Gender::Female),
 		(2, *b"123456789012345a", Gender::Male),
 	])
 	.execute_with(|| {
+		// Check buy_kitty fails when kitty is not for sale
+		let id = KittiesOwned::<Test>::get(1)[0];
+		// Kitty is not for sale
+		assert_noop!(
+			SubstrateKitties::buy_kitty(Origin::signed(2), id, 2),
+			Error::<Test>::NotForSale
+		);
+		
 		// Check buy_kitty fails when bid price is too low
-
 		// New price is set to 4
 		let id = KittiesOwned::<Test>::get(2)[0];
 		let set_price = 4;
@@ -426,44 +442,6 @@ fn high_bid_transfers_correctly() {
 		assert_noop!(
 			SubstrateKitties::buy_kitty(Origin::signed(10), id, set_price * 10),
 			Error::<Test>::TooManyOwned
-		);
-	});
-}
-
-#[test]
-fn too_low_balance_should_fail() {
-	new_test_ext(vec![
-		(1, *b"1234567890123456", Gender::Female),
-		(2, *b"123456789012345a", Gender::Male),
-	])
-	.execute_with(|| {
-		// Check buy_kitty fails when balance is too low
-
-		// Use some kitty in storage owned by account 2 and set a high price
-		let id = KittiesOwned::<Test>::get(2)[0];
-		let price = u64::MAX;
-		assert_ok!(SubstrateKitties::set_price(Origin::signed(2), id, Some(price)));
-
-		assert_noop!(
-			SubstrateKitties::buy_kitty(Origin::signed(1), id, price),
-			pallet_balances::Error::<Test>::InsufficientBalance
-		);
-	});
-}
-
-#[test]
-fn kitty_not_for_sale() {
-	new_test_ext(vec![
-		(1, *b"1234567890123456", Gender::Female),
-		(2, *b"123456789012345a", Gender::Male),
-	])
-	.execute_with(|| {
-		// Check buy_kitty fails when kitty is not for sale
-		let id = KittiesOwned::<Test>::get(1)[0];
-		// Kitty is not for sale
-		assert_noop!(
-			SubstrateKitties::buy_kitty(Origin::signed(2), id, 2),
-			Error::<Test>::NotForSale
 		);
 	});
 }
