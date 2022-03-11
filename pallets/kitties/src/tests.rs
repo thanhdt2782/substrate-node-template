@@ -61,7 +61,7 @@ fn create_kitty_should_work() {
 		// Create a kitty with account #10
 		assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
 
-		// Check that 3 kitties exists (together with the 2 from genesis)
+		// Check that now 3 kitties exists (together with the 2 from genesis)
 		assert_eq!(CountForKitties::<Test>::get(), 3);
 
 		// Check that account #10 owns 1 kitty
@@ -70,10 +70,46 @@ fn create_kitty_should_work() {
 		let id = kitties_owned.last().unwrap();
 		assert_ownership(10, *id);
 
-		// Check that this kitty is specifically owned by account #10
-		let kitty = Kitties::<Test>::get(id).unwrap();
-		assert_eq!(kitty.owner, 10);
-		assert_eq!(kitty.price, None);
+		// Check that multiple create_kitty calls work in the same block.
+		// Increment extrinsic index to add entropy for DNA
+		frame_system::Pallet::<Test>::set_extrinsic_index(1);
+		assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
+	});
+}
+
+#[test]
+fn create_kitty_fails() {
+	// Check that create_kitty fails when user owns too many kitties.
+	new_test_ext(vec![
+		(1, *b"1234567890123456", Gender::Female),
+		(2, *b"123456789012345a", Gender::Male),
+	])
+	.execute_with(|| {
+		// Create `MaxKittiesOwned` kitties with account #10
+		for _i in 0..<Test as Config>::MaxKittiesOwned::get() {
+			assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
+			// We do this because the hash of the kitty depends on this for seed,
+			// so changing this allows you to have a different kitty id
+			System::set_block_number(System::block_number() + 1);
+		}
+
+		// Can't create 1 more
+		assert_noop!(
+			SubstrateKitties::create_kitty(Origin::signed(10)),
+			Error::<Test>::TooManyOwned
+		);
+		
+		// Minting a kitty with DNA that already exists should fail
+		let id = [0u8; 16];
+
+		// Mint new kitty with `id`
+		assert_ok!(SubstrateKitties::mint(&1, id, Gender::Male));
+
+		// Mint another kitty with the same `id` should fail
+		assert_noop!(
+			SubstrateKitties::mint(&1, id, Gender::Male), 
+			Error::<Test>::DuplicateKitty
+		);
 	});
 }
 
