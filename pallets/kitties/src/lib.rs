@@ -265,7 +265,7 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		// Generates and returns DNA and Gender
-		fn gen_dna() -> ([u8; 16], Gender) {
+		pub fn gen_dna() -> ([u8; 16], Gender) {
 			// Create randomness
 			let random = T::KittyRandomness::random(&b"dna"[..]).0;
 
@@ -283,31 +283,41 @@ pub mod pallet {
 
 			// Generate Gender
 			if hash[0] % 2 == 0 {
+				// Males are identified by having a even leading byte
 				(hash, Gender::Male)
 			} else {
+            	// Females are identified by having a odd leading byte
 				(hash, Gender::Female)
 			}
 		}
 
 		// Picks from existing DNA
 		fn mutate_dna_fragment(dna_fragment1: u8, dna_fragment2: u8, random_value: u8) -> u8 {
+			// Given some random u8 
 			if random_value % 2 == 0 {
+				// either return `dna_fragment1` if its an even value 
 				dna_fragment1
 			} else {
+				// or return `dna_fragment2` if its an odd value
 				dna_fragment2
 			}
 		}
 
 		// Generates a new kitty using existing kitties
 		pub fn breed_dna(parent1: &[u8; 16], parent2: &[u8; 16]) -> ([u8; 16], Gender) {
+			
+			// Call `gen_dna` to generate random kitty DNA 
+			// We don't know what Gender this kitty is yet
 			let (mut new_dna, new_gender) = Self::gen_dna();
 
+			// randomly combine DNA using `mutate_dna_fragment`
 			for i in 0..new_dna.len() {
 				// At this point, `new_dna` is a randomly generated set of bytes, so we can
-				// extract each of its bytes to act as a random value.
+				// extract each of its bytes to act as a random value for `mutate_dna_fragment`
 				new_dna[i] = Self::mutate_dna_fragment(parent1[i], parent2[i], new_dna[i])
 			}
-			(new_dna, new_gender)
+			// return new DNA and gender
+			(new_dna, new_gender)	
 		}
 
 		// Helper to mint a kitty
