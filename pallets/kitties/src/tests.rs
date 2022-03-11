@@ -42,12 +42,12 @@ fn should_build_genesis_kitties() {
 		let kitties_owned_by_2 = KittiesOwned::<Test>::get(2);
 		assert_eq!(kitties_owned_by_2.len(), 1);
 
-		// Check that kitties are owned correctly
-		let kid1 = kitties_owned_by_1[0];
-		assert_ownership(1, kid1);
+		// Check that kitties are owned by the correct owners
+		let kitty_1 = kitties_owned_by_1[0];
+		assert_ownership(1, kitty_1);
 
-		let kid2 = kitties_owned_by_2[0];
-		assert_ownership(2, kid2);
+		let kitty_2 = kitties_owned_by_2[0];
+		assert_ownership(2, kitty_2);
 	});
 }
 
@@ -58,19 +58,19 @@ fn create_kitty_should_work() {
 		(2, *b"123456789012345a", Gender::Male),
 	])
 	.execute_with(|| {
-		// create a kitty with account #10
+		// Create a kitty with account #10
 		assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
 
-		// check that 3 kitties exists (together with the 2 from genesis)
+		// Check that 3 kitties exists (together with the 2 from genesis)
 		assert_eq!(CountForKitties::<Test>::get(), 3);
 
-		// check that account #10 owns 1 kitty
+		// Check that account #10 owns 1 kitty
 		let kitties_owned = KittiesOwned::<Test>::get(10);
 		assert_eq!(kitties_owned.len(), 1);
 		let id = kitties_owned.last().unwrap();
 		assert_ownership(10, *id);
 
-		// check that this kitty is specifically owned by account #10
+		// Check that this kitty is specifically owned by account #10
 		let kitty = Kitties::<Test>::get(id).unwrap();
 		assert_eq!(kitty.owner, 10);
 		assert_eq!(kitty.price, None);
@@ -84,15 +84,16 @@ fn transfer_kitty_should_work() {
 		(2, *b"123456789012345a", Gender::Male),
 	])
 	.execute_with(|| {
-		// check that account 10 own a kitty
+		// Check that account 10 own a kitty
 		assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
 		let id = KittiesOwned::<Test>::get(10)[0];
 
-		// account 10 send kitty to account 3
+		// Account 10 send kitty to account 3
 		assert_ok!(SubstrateKitties::transfer(Origin::signed(10), 3, id));
 
-		// account 10 now has nothing
+		// Account 10 now has nothing
 		assert_eq!(KittiesOwned::<Test>::get(10).len(), 0);
+
 		// but account 3 does
 		assert_eq!(KittiesOwned::<Test>::get(3).len(), 1);
 		assert_ownership(3, id);
@@ -108,7 +109,7 @@ fn transfer_non_owned_kitty_should_fail() {
 	.execute_with(|| {
 		let hash = KittiesOwned::<Test>::get(1)[0];
 
-		// account 0 cannot transfer a kitty with this hash.
+		// Account 9 cannot transfer a kitty with this hash.
 		assert_noop!(
 			SubstrateKitties::transfer(Origin::signed(9), 2, hash),
 			Error::<Test>::NotOwner
@@ -126,8 +127,10 @@ fn mint_should_fail() {
 	.execute_with(|| {
 		let id = [0u8; 16];
 
+		// Mint new kitty with `id`
 		assert_ok!(SubstrateKitties::mint(&1, id, Gender::Male));
 
+		// Mint another kitty with the same `id` should fail
 		assert_noop!(SubstrateKitties::mint(&1, id, Gender::Male), Error::<Test>::DuplicateKitty);
 	});
 }
@@ -141,11 +144,13 @@ fn multiple_kitties_in_one_block() {
 		(2, *b"123456789012345a", Gender::Male),
 	]).execute_with(|| {
 
-		// create a kitty with account #10
+		// Create a kitty with account #10
 		assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
+
+		// Increment extrinsic index
 		frame_system::Pallet::<Test>::set_extrinsic_index(1);
 
-		// create a kitty with account #10
+		// Create a kitty with account #10
 		assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
 	});
 }
@@ -166,12 +171,18 @@ fn breed_kitty_works() {
 		let dad = [1u8; 16];
 		assert_ok!(SubstrateKitties::mint(&1, dad, Gender::Male));
 
-		// NOTE: We'll write a separate test to check different genders
 		// Breeder can only breed kitties they own
 		assert_ok!(SubstrateKitties::breed_kitty(Origin::signed(1), mom, dad));
 
-		// Check the hash is from the mom and dad
-		// If mom was 0 and 2 it should e that
+		// Check that newly bred kitty exists
+		assert_ok!(KittiesOwned::<Test>::get(1)[3]);
+
+		// Check the new DNA is from the mom and dad
+		let new_dna = KittiesOwned::<Test>::get(1)[3];
+		for &i in new_dna.iter() {
+			assert!(i == 0u8 || i == 1u8)
+		}
+
 		// Kitty cant breed with itself
 		assert_noop!(
 			SubstrateKitties::breed_kitty(Origin::signed(1), mom, mom),
@@ -188,7 +199,7 @@ fn cant_exceed_max_kitties() {
 		(2, *b"123456789012345a", Gender::Male),
 	])
 	.execute_with(|| {
-		// create `MaxKittiesOwned` kitties with account #10
+		// Create `MaxKittiesOwned` kitties with account #10
 		for _i in 0..<Test as Config>::MaxKittiesOwned::get() {
 			assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
 			// We do this because the hash of the kitty depends on this for seed,
@@ -196,7 +207,7 @@ fn cant_exceed_max_kitties() {
 			System::set_block_number(System::block_number() + 1);
 		}
 
-		// can't create 1 more
+		// Can't create 1 more
 		assert_noop!(
 			SubstrateKitties::create_kitty(Origin::signed(10)),
 			Error::<Test>::TooManyOwned
@@ -235,12 +246,12 @@ fn ensure_opposite_gender() {
 	.execute_with(|| {
 		// Check that breed kitty checks opposite gender
 		let kitty_1 = [1u8; 16];
-		let kitty_2 = [2u8; 16];
+		let kitty_2 = [3u8; 16];
 
 		// Mint a Female kitty
 		assert_ok!(SubstrateKitties::mint(&3, kitty_1, Gender::Female));
 
-		// Mint a Female kitty
+		// Mint another Female kitty
 		assert_ok!(SubstrateKitties::mint(&3, kitty_2, Gender::Female));
 
 		// Same gender kitty can't breed
@@ -263,18 +274,23 @@ fn dna_helpers_should_work() {
 		let dna_1 = [1u8; 16];
 		let dna_2 = [2u8; 16];
 
-		// Should generate unique Gender and DNA
+		// Generate unique Gender and DNA
 		let (dna, gender) = SubstrateKitties::breed_dna(&dna_1, &dna_2);
 
-		// Ensure that dna is unique
-		assert!(dna_1 != dna);
-
-		for i in dna.iter() {
-			assert!(i == &1u8 || i == &2u8)
+		// Check that the new kitty is actually a child of one of its parents
+		// DNA bytes must be a mix of mom or dad's DNA
+		for &i in dna.iter() {
+			assert!(i == 1u8 || i == 2u8)
 		}
 
-		// calling mint with this new dna should work
-		assert_ok!(SubstrateKitties::mint(&3, dna, gender));
+		// Test that randomness works in same block
+		let (random_dna_1, _) = SubstrateKitties::gen_dna();
+		// increment extrinsic index
+		frame_system::Pallet::<Test>::set_extrinsic_index(1);
+		let (random_dna_2, _) = SubstrateKitties::gen_dna();
+
+		// Random values should not be equal
+		assert_ne!(random_dna_1, random_dna_2);
 	});
 }
 
@@ -293,16 +309,7 @@ fn transfer_fails_to_self() {
 			SubstrateKitties::transfer(Origin::signed(1), 1, id),
 			Error::<Test>::TransferToSelf
 		);
-	});
-}
 
-#[test]
-fn transfer_fails_when_no_kitty_exists() {
-	new_test_ext(vec![
-		(1, *b"1234567890123456", Gender::Female),
-		(2, *b"123456789012345a", Gender::Male),
-	])
-	.execute_with(|| {
 		// Check transfer fails when no kitty exists
 		let random_id = [0u8; 16];
 
@@ -310,17 +317,9 @@ fn transfer_fails_when_no_kitty_exists() {
 			SubstrateKitties::transfer(Origin::signed(2), 1, random_id),
 			Error::<Test>::NoKitty
 		);
-	});
-}
 
-#[test]
-fn transfer_fails_when_max_kitty_reached() {
-	new_test_ext(vec![
-		(1, *b"1234567890123456", Gender::Female),
-		(2, *b"123456789012345a", Gender::Male),
-	])
-	.execute_with(|| {
-		// Create `MaxKittiesOwned` kitties with account #10
+		// Check that transfer fails when max kitty is reached
+		// Create `MaxKittiesOwned` kitties for account #10
 		for _i in 0..<Test as Config>::MaxKittiesOwned::get() {
 			assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
 			System::set_block_number(System::block_number() + 1);
@@ -345,17 +344,23 @@ fn buy_kitty_works() {
 	])
 	.execute_with(|| {
 		// Check buy_kitty works as expected
-		// Account #2 sets a price of 4 for their kitty
 		let id = KittiesOwned::<Test>::get(2)[0];
 		let set_price = 4;
+		let balance_1_before = Balances::free_balance(&1);
+		let balance_2_before = Balances::free_balance(&2);
 
+		// Account #2 sets a price of 4 for their kitty
 		assert_ok!(SubstrateKitties::set_price(Origin::signed(2), id, Some(set_price)));
 
 		// Account #1 can buy account #2's kitty
 		assert_ok!(SubstrateKitties::buy_kitty(Origin::signed(1), id, set_price));
 
-		// Add the fact the price transfer worked
+		// Balance transfer works as expected
+		let balance_1_after = Balances::free_balance(&1);
+		let balance_2_after = Balances::free_balance(&2);
 
+		assert!(balance_1_before - set_price == balance_1_after);
+		assert!(balance_2_before + set_price == balance_2_after);
 
 		// Kitty is not for sale
 		assert_noop!(
@@ -395,14 +400,37 @@ fn high_bid_transfers_correctly() {
 	])
 	.execute_with(|| {
 		// Check buy_kitty transfers the right amount when bid price is too high
+		// First get the balances of each account
+		let balance_1_before = Balances::free_balance(&1);
+		let balance_2_before = Balances::free_balance(&2);
 
-		// New price is set to 4
+		// Account #2 sets new price to 4
 		let id = KittiesOwned::<Test>::get(2)[0];
 		let set_price = 4;
 		assert_ok!(SubstrateKitties::set_price(Origin::signed(2), id, Some(set_price)));
 
-		// High bid transfer works
+		// Account #1 buys kitty at 10x the price
 		assert_ok!(SubstrateKitties::buy_kitty(Origin::signed(1), id, set_price * 10));
+
+		// Balance transfer worked as expected
+		let balance_1_after = Balances::free_balance(&1);
+		let balance_2_after = Balances::free_balance(&2);
+
+		assert!(balance_1_before - set_price * 10  == balance_1_after);
+		assert!(balance_2_before + set_price * 10 == balance_2_after);
+
+
+		// Check that it's not possible to buy a kitty if max is reached
+		// Set max kitties for account #10
+		for _i in 0..<Test as Config>::MaxKittiesOwned::get() {
+			assert_ok!(SubstrateKitties::create_kitty(Origin::signed(10)));
+			System::set_block_number(System::block_number() + 1);
+		}
+		// Account #10 should not be able to buy a new kitty
+		assert_noop!(
+			SubstrateKitties::buy_kitty(Origin::signed(10), id, set_price * 10),
+			Error::<Test>::TooManyOwned
+		);
 	});
 }
 
@@ -457,6 +485,13 @@ fn set_price_works() {
 		let id = KittiesOwned::<Test>::get(2)[0];
 		let set_price = 4;
 		assert_ok!(SubstrateKitties::set_price(Origin::signed(2), id, Some(set_price)));
+
+		// Only owner can set price
+		assert_noop!(
+			SubstrateKitties::set_price(Origin::signed(1), id, Some(set_price)),
+			Error::<Test>::NotOwner
+		);
+
 	});
 }
 
