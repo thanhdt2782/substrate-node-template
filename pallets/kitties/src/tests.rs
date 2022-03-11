@@ -174,10 +174,7 @@ fn breed_kitty_works() {
 		// Breeder can only breed kitties they own
 		assert_ok!(SubstrateKitties::breed_kitty(Origin::signed(1), mom, dad));
 
-		// Check that newly bred kitty exists
-		assert_ok!(KittiesOwned::<Test>::get(1)[3]);
-
-		// Check the new DNA is from the mom and dad
+		// Check the new kitty exists and DNA is from the mom and dad
 		let new_dna = KittiesOwned::<Test>::get(1)[3];
 		for &i in new_dna.iter() {
 			assert!(i == 0u8 || i == 1u8)
@@ -409,16 +406,15 @@ fn high_bid_transfers_correctly() {
 		let set_price = 4;
 		assert_ok!(SubstrateKitties::set_price(Origin::signed(2), id, Some(set_price)));
 
-		// Account #1 buys kitty at 10x the price
-		assert_ok!(SubstrateKitties::buy_kitty(Origin::signed(1), id, set_price * 10));
+		// Account #1 buys kitty at 2x the price
+		assert_ok!(SubstrateKitties::buy_kitty(Origin::signed(1), id, set_price*2));
 
 		// Balance transfer worked as expected
 		let balance_1_after = Balances::free_balance(&1);
 		let balance_2_after = Balances::free_balance(&2);
 
-		assert!(balance_1_before - set_price * 10  == balance_1_after);
-		assert!(balance_2_before + set_price * 10 == balance_2_after);
-
+		assert!(balance_1_before - set_price*2  == balance_1_after);
+		assert!(balance_2_before + set_price*2 == balance_2_after);
 
 		// Check that it's not possible to buy a kitty if max is reached
 		// Set max kitties for account #10
