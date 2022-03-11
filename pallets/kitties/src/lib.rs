@@ -367,16 +367,17 @@ pub mod pallet {
 
 			// Mutating state here via a balance transfer, so nothing is allowed to fail after this.
 			if let Some(bid_price) = maybe_bid_price {
+				// Current kitty price 
 				if let Some(price) = kitty.price {
 					ensure!(bid_price >= price, Error::<T>::BidPriceTooLow);
 					// Transfer the amount from buyer to seller
-					T::Currency::transfer(&to, &from, price, ExistenceRequirement::KeepAlive)?;
+					T::Currency::transfer(&to, &from, bid_price, ExistenceRequirement::KeepAlive)?;
 					// Deposit sold event
 					Self::deposit_event(Event::Sold {
 						seller: from.clone(),
 						buyer: to.clone(),
 						kitty: kitty_id,
-						price,
+						price: bid_price,
 					});
 				} else {
 					return Err(Error::<T>::NotForSale.into())
