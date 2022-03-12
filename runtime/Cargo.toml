@@ -62,7 +62,7 @@ std = [
 	"codec/std",
 	"scale-info/std",
 	"frame-executive/std",
-	"frame-support/std",
+	"frame-support/std",'
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
 	"pallet-aura/std",
