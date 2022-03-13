@@ -273,8 +273,7 @@ impl pallet_sudo::Config for Runtime {
 impl pallet_template::Config for Runtime {
 	type Event = Event;
 }
-impl pallet_tigthly_coupling::Config for Runtime
-{
+impl pallet_tightly_coupling::Config for Runtime{
 	type Event = Event;
 }
 
